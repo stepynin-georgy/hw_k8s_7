@@ -226,9 +226,90 @@ user@k8s:/opt/hw_k8s_7$ ls -l /data/pvc-first/success.txt
 
 1. Включить и настроить NFS-сервер на MicroK8S.
 
+```
+user@k8s:/opt/hw_k8s_7$ microk8s enable nfs
+Infer repository community for addon nfs
+Infer repository core for addon helm3
+Addon core/helm3 is already enabled
+Installing NFS Server Provisioner - Helm Chart 1.4.0
 
+Node Name not defined. NFS Server Provisioner will be deployed on random Microk8s Node.
+
+If you want to use a dedicated (large disk space) Node as NFS Server, disable the Addon and start over: microk8s enable nfs -n NODE_NAME
+Lookup Microk8s Node name as: kubectl get node -o yaml | grep 'kubernetes.io/hostname'
+
+Preparing PV for NFS Server Provisioner
+
+persistentvolume/data-nfs-server-provisioner-0 created
+"nfs-ganesha-server-and-external-provisioner" has been added to your repositories
+Release "nfs-server-provisioner" does not exist. Installing it now.
+NAME: nfs-server-provisioner
+LAST DEPLOYED: Wed Dec 11 13:15:19 2024
+NAMESPACE: nfs-server-provisioner
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+NOTES:
+The NFS Provisioner service has now been installed.
+```
+
+```
+user@k8s:/opt/hw_k8s_7$ microk8s kubectl get pv
+NAME                            CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                                                  STORAGECLASS   VOLUMEATTRIBUTESCLASS   REASON   AGE
+data-nfs-server-provisioner-0   1Gi        RWO            Retain           Bound    nfs-server-provisioner/data-nfs-server-provisioner-0                  <unset>                          24m
+```
 
 2. Создать Deployment приложения состоящего из multitool, и подключить к нему PV, созданный автоматически на сервере NFS.
+
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: volume-hw2-nfs
+  labels:
+    app: volume-hw2-nfs
+spec:
+  selector:
+    matchLabels:
+      app: volume-hw2-nfs
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: volume-hw2-nfs
+    spec:
+      containers:
+      - name: multitool
+        image: wbitt/network-multitool
+        ports:
+        - containerPort: 8080
+        env:
+          - name: HTTP_PORT
+            value: "1180"
+        volumeMounts:
+        - name: nfs-storage
+          mountPath: "/data"
+      volumes:
+      - name: nfs-storage
+        persistentVolumeClaim:
+          claimName: nfs-pvc
+```
+
+```
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+```
+
+
+
 3. Продемонстрировать возможность чтения и записи файла изнутри пода. 
 4. Предоставить манифесты, а также скриншоты или вывод необходимых команд.
 
