@@ -232,6 +232,12 @@ user@k8s:/opt/hw_k8s_7$ ls -l /mnt/data/success.txt
 
 5. Предоставить манифесты, а также скриншоты или вывод необходимых команд.
 
+[deployment.yml](https://github.com/stepynin-georgy/hw_k8s_7/blob/main/deployment.yml)
+
+[persistent-volume-claim.yaml](https://github.com/stepynin-georgy/hw_k8s_7/blob/main/persistent-volume-claim.yaml)
+
+[persistent-volume.yaml](https://github.com/stepynin-georgy/hw_k8s_7/blob/main/persistent-volume.yaml)
+
 ------
 
 ### Задание 2
@@ -334,6 +340,10 @@ test
 ```
 
 4. Предоставить манифесты, а также скриншоты или вывод необходимых команд.
+
+[deployment-nfs.yml](https://github.com/stepynin-georgy/hw_k8s_7/blob/main/deployment-nfs.yml)
+
+[pvc-nfs.yml](https://github.com/stepynin-georgy/hw_k8s_7/blob/main/pvc-nfs.yml)
 
 ------
 
