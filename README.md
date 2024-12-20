@@ -35,42 +35,51 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: volume-hw2
+  name: busybox-multitool
+  labels:
+    app: busy-multi
 spec:
+  replicas: 1
   selector:
     matchLabels:
-      app: volume-hw2
-  replicas: 1
+      app: busy-multi
   template:
     metadata:
       labels:
-        app: volume-hw2
+        app: busy-multi
     spec:
       containers:
-      - name: busybox
-        image: busybox:1.28
-        command: ['sh', '-c', 'mkdir -p /volumes && while true; do echo "$(date) - Test message" >> /volumes/success.txt; sleep 5; done']
+      - name: app1
+        image: busybox
+        command: ['sh', '-c', 'while true; do echo "Домашнее задание к занятию «Хранение в K8s. Часть 2»" >> /output/success.txt; sleep 5; done']
         volumeMounts:
-        - name: volume
-          mountPath: /volumes
+        - mountPath: /output
+          name: example-volume
+
+
       - name: multitool
         image: wbitt/network-multitool
-        command: ['sh', '-c', 'tail -f /volumes/success.txt']
+        command: ['sh', '-c', 'tail -f /input/success.txt']
         volumeMounts:
-        - name: volume
-          mountPath: /volumes
+        - name: example-volume
+          mountPath: /input
+        ports:
+        - containerPort: 8080
+        env: 
+          - name: HTTP_PORT
+            value: "9080"
       volumes:
-      - name: volume
+      - name: example-volume
         persistentVolumeClaim:
-          claimName: pvc-vol
+          claimName: example-pvc
 ```
 
 ```
 user@k8s:/opt/hw_k8s_7$ microk8s kubectl apply -f deployment.yml
-deployment.apps/volume-hw2 created
+deployment.apps/busybox-multitool created
 user@k8s:/opt/hw_k8s_7$ microk8s kubectl get pods
-NAME                          READY   STATUS    RESTARTS   AGE
-volume-hw2-5746cfb4d6-2rfps   0/2     Pending   0          7s
+NAME                                 READY   STATUS    RESTARTS   AGE
+busybox-multitool-5fdfbf7979-md9pm   0/2     Pending   0          17s
 ```
 
 2. Создать PV и PVC для подключения папки на локальной ноде, которая будет использована в поде.
@@ -79,28 +88,28 @@ volume-hw2-5746cfb4d6-2rfps   0/2     Pending   0          7s
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: local-volume
+  name: example-pv
 spec:
   capacity:
     storage: 1Gi
   accessModes:
     - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Delete
-  storageClassName: local-storage
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
   hostPath:
-    path: /data/pvc-first
+    path: "/mnt/data"
 ```
 
 ```
-
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: pvc-vol
+  name: example-pvc
+# namespace: web
 spec:
-  storageClassName: local-storage
   accessModes:
     - ReadWriteOnce
+  storageClassName: ""
   resources:
     requests:
       storage: 1Gi
@@ -112,107 +121,114 @@ persistentvolume/local-volume created
 user@k8s:/opt/hw_k8s_7$ microk8s kubectl apply -f pvc.yml
 persistentvolumeclaim/pvc-vol created
 user@k8s:/opt/hw_k8s_7$ microk8s kubectl get pv
-NAME           CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM             STORAGECLASS    VOLUMEATTRIBUTESCLASS   REASON   AGE
-local-volume   1Gi        RWO            Delete           Bound    default/pvc-vol   local-storage   <unset>                          14s
+NAME         CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                 STORAGECLASS   VOLUMEATTRIBUTESCLASS   REASON   AGE
+example-pv   1Gi        RWO            Retain           Bound    default/example-pvc                  <unset>                          8m56s
 user@k8s:/opt/hw_k8s_7$ microk8s kubectl get pvc
-NAME      STATUS   VOLUME         CAPACITY   ACCESS MODES   STORAGECLASS    VOLUMEATTRIBUTESCLASS   AGE
-pvc-vol   Bound    local-volume   1Gi        RWO            local-storage   <unset>                 15s
+NAME          STATUS   VOLUME       CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+example-pvc   Bound    example-pv   1Gi        RWO                           <unset>                 8m51s
 ```
 
 3. Продемонстрировать, что multitool может читать файл, в который busybox пишет каждые пять секунд в общей директории.
 
 ```
-user@k8s:/opt/hw_k8s_7$ microk8s kubectl exec -ti volume-hw2-5746cfb4d6-2rfps -c multitool -- /bin/bash
-volume-hw2-5746cfb4d6-2rfps:/# cd /volumes/
-volume-hw2-5746cfb4d6-2rfps:/volumes# tail -f success.txt
-Wed Dec 11 11:38:37 UTC 2024 - Test message
-Wed Dec 11 11:38:42 UTC 2024 - Test message
-Wed Dec 11 11:38:47 UTC 2024 - Test message
-Wed Dec 11 11:38:52 UTC 2024 - Test message
-Wed Dec 11 11:38:57 UTC 2024 - Test message
-Wed Dec 11 11:39:02 UTC 2024 - Test message
-Wed Dec 11 11:39:07 UTC 2024 - Test message
-Wed Dec 11 11:39:12 UTC 2024 - Test message
-Wed Dec 11 11:39:17 UTC 2024 - Test message
-Wed Dec 11 11:39:22 UTC 2024 - Test message
+user@k8s:/opt/hw_k8s_7$ microk8s kubectl exec -ti busybox-multitool-5fdfbf7979-md9pm  -c multitool -- /bin/bash
+busybox-multitool-5fdfbf7979-md9pm:/# cd /input/
+busybox-multitool-5fdfbf7979-md9pm:/input# tail -f success.txt
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
 ```
 
 ```
-user@k8s:/opt/hw_k8s_7$ microk8s kubectl logs volume-hw2-5746cfb4d6-2rfps multitool
-Wed Dec 11 11:28:27 UTC 2024 - Test message
-Wed Dec 11 11:28:32 UTC 2024 - Test message
-Wed Dec 11 11:28:37 UTC 2024 - Test message
-Wed Dec 11 11:28:42 UTC 2024 - Test message
-Wed Dec 11 11:28:47 UTC 2024 - Test message
-Wed Dec 11 11:28:52 UTC 2024 - Test message
-Wed Dec 11 11:28:57 UTC 2024 - Test message
-Wed Dec 11 11:29:02 UTC 2024 - Test message
-Wed Dec 11 11:29:07 UTC 2024 - Test message
-Wed Dec 11 11:29:12 UTC 2024 - Test message
-Wed Dec 11 11:29:17 UTC 2024 - Test message
-Wed Dec 11 11:29:22 UTC 2024 - Test message
+user@k8s:/opt/hw_k8s_7$ microk8s kubectl logs busybox-multitool-5fdfbf7979-md9pm  multitool
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
 ```
 
 4. Удалить Deployment и PVC. Продемонстрировать, что после этого произошло с PV. Пояснить, почему.
 
 ```
-user@k8s:/opt/hw_k8s_7$ microk8s kubectl delete deployment volume-hw2
-deployment.apps "volume-hw2" deleted
-user@k8s:/opt/hw_k8s_7$ microk8s kubectl delete pvc pvc-vol
-persistentvolumeclaim "pvc-vol" deleted
+user@k8s:/opt/hw_k8s_7$ microk8s kubectl delete deployment busybox-multitool
+deployment.apps "busybox-multitool" deleted
+user@k8s:/opt/hw_k8s_7$ microk8s kubectl delete pvc example-pvc
+persistentvolumeclaim "example-pvc" deleted
+
 ```
 
 ```
 user@k8s:/opt/hw_k8s_7$ microk8s kubectl get pv
-NAME           CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM             STORAGECLASS    VOLUMEATTRIBUTESCLASS   REASON   AGE
-local-volume   1Gi        RWO            Delete           Failed   default/pvc-vol   local-storage   <unset>                          15m
+NAME         CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS     CLAIM                 STORAGECLASS   VOLUMEATTRIBUTESCLASS   REASON   AGE
+example-pv   1Gi        RWO            Retain           Released   default/example-pvc                  <unset>                          13m
 
-user@k8s:/opt/hw_k8s_7$ microk8s kubectl describe pv local-volume
-Name:            local-volume
+user@k8s:/opt/hw_k8s_7$ microk8s kubectl describe pv example-pv
+Name:            example-pv
 Labels:          <none>
 Annotations:     pv.kubernetes.io/bound-by-controller: yes
 Finalizers:      [kubernetes.io/pv-protection]
-StorageClass:    local-storage
-Status:          Failed
-Claim:           default/pvc-vol
-Reclaim Policy:  Delete
+StorageClass:
+Status:          Released
+Claim:           default/example-pvc
+Reclaim Policy:  Retain
 Access Modes:    RWO
 VolumeMode:      Filesystem
 Capacity:        1Gi
 Node Affinity:   <none>
-Message:         host_path deleter only supports /tmp/.+ but received provided /data/pvc-first
+Message:
 Source:
     Type:          HostPath (bare host directory volume)
-    Path:          /data/pvc-first
+    Path:          /mnt/data
     HostPathType:
-Events:
-  Type     Reason              Age   From                         Message
-  ----     ------              ----  ----                         -------
-  Warning  VolumeFailedDelete  68s   persistentvolume-controller  host_path deleter only supports /tmp/.+ but received provided /data/pvc-first
+Events:            <none>
 ```
 
-PV перешел в состояние Failed, т.к. контроллер PV не сумел удалить данные по пути /data/pvc-first. По умолчанию он может удалить только данные по пути /tmp. Если бы там находились файлы, то они были бы утеряны.
+Удалил Deployment и PVC. PV поменял статус с Bound на Released. До удаления PV был связан с PVC и Deployment, поэтому статус был Bound. А после удаления Deployment и PVC он уже ни с чем не связан, поэтому статус поменялся на Released.
 
 5. Продемонстрировать, что файл сохранился на локальном диске ноды. Удалить PV.  Продемонстрировать что произошло с файлом после удаления PV. Пояснить, почему.
 
 ```
-user@k8s:/opt/hw_k8s_7$ ls -l /data/pvc-first/success.txt
--rw-r--r-- 1 root root 7788 Dec 11 11:43 /data/pvc-first/success.txt
+user@k8s:/opt/hw_k8s_7$ tail -f /mnt/data/success.txt
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
+Домашнее задание к занятию «Хранение в K8s. Часть 2»
 ```
 
 ```
-user@k8s:/opt/hw_k8s_7$ microk8s kubectl delete pv local-volume
-persistentvolume "local-volume" deleted
+user@k8s:/opt/hw_k8s_7$ microk8s kubectl delete pv example-pv
+persistentvolume "example-pv" deleted
 ```
 
 Файл сохранился:
 
 ```
-user@k8s:/opt/hw_k8s_7$ ls -l /data/pvc-first/success.txt
--rw-r--r-- 1 root root 7788 Dec 11 11:43 /data/pvc-first/success.txt
+user@k8s:/opt/hw_k8s_7$ ls -l /mnt/data/success.txt
+-rw-r--r-- 1 root root 12880 Dec 20 13:01 /mnt/data/success.txt
 ```
 
-После удаления PV, файл в директории /data/pvc-first останется на месте из-за особенностей работы контроллера PV с hostPath. В случае если в манифесте PV политика persistentVolumeReclaimPolicy будет установлена в Recycle, то файл будет удален.
+Удалил PV, файл также сохранился на локальном диске ноды потому что значение в PV у persistentVolumeReclaimPolicy: Retain - это значит, что после удаления PV ресурсы из внешних провайдеров автоматически не удаляются.
 
 5. Предоставить манифесты, а также скриншоты или вывод необходимых команд.
 
@@ -227,36 +243,25 @@ user@k8s:/opt/hw_k8s_7$ ls -l /data/pvc-first/success.txt
 1. Включить и настроить NFS-сервер на MicroK8S.
 
 ```
-user@k8s:/opt/hw_k8s_7$ microk8s enable nfs
-Infer repository community for addon nfs
-Infer repository core for addon helm3
-Addon core/helm3 is already enabled
-Installing NFS Server Provisioner - Helm Chart 1.4.0
 
-Node Name not defined. NFS Server Provisioner will be deployed on random Microk8s Node.
+user@k8s:/opt/hw_k8s_7$ microk8s enable hostpath-storage
+Infer repository core for addon hostpath-storage
+Enabling default storage class.
+WARNING: Hostpath storage is not suitable for production environments.
+         A hostpath volume can grow beyond the size limit set in the volume claim manifest.
 
-If you want to use a dedicated (large disk space) Node as NFS Server, disable the Addon and start over: microk8s enable nfs -n NODE_NAME
-Lookup Microk8s Node name as: kubectl get node -o yaml | grep 'kubernetes.io/hostname'
-
-Preparing PV for NFS Server Provisioner
-
-persistentvolume/data-nfs-server-provisioner-0 created
-"nfs-ganesha-server-and-external-provisioner" has been added to your repositories
-Release "nfs-server-provisioner" does not exist. Installing it now.
-NAME: nfs-server-provisioner
-LAST DEPLOYED: Wed Dec 11 13:15:19 2024
-NAMESPACE: nfs-server-provisioner
-STATUS: deployed
-REVISION: 1
-TEST SUITE: None
-NOTES:
-The NFS Provisioner service has now been installed.
+deployment.apps/hostpath-provisioner created
+storageclass.storage.k8s.io/microk8s-hostpath created
+serviceaccount/microk8s-hostpath created
+clusterrole.rbac.authorization.k8s.io/microk8s-hostpath created
+clusterrolebinding.rbac.authorization.k8s.io/microk8s-hostpath created
+Storage will be available soon.
 ```
 
 ```
 user@k8s:/opt/hw_k8s_7$ microk8s kubectl get pv
-NAME                            CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                                                  STORAGECLASS   VOLUMEATTRIBUTESCLASS   REASON   AGE
-data-nfs-server-provisioner-0   1Gi        RWO            Retain           Bound    nfs-server-provisioner/data-nfs-server-provisioner-0                  <unset>                          24m
+NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                 STORAGECLASS        VOLUMEATTRIBUTESCLASS   REASON   AGE
+pvc-5c00d1f6-ef4f-4b0c-8ffd-e059ecd93203   1Gi        RWX            Delete           Bound    default/example-pvc   microk8s-hostpath   <unset>                          13s
 ```
 
 2. Создать Deployment приложения состоящего из multitool, и подключить к нему PV, созданный автоматически на сервере NFS.
@@ -265,52 +270,69 @@ data-nfs-server-provisioner-0   1Gi        RWO            Retain           Bound
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: volume-hw2-nfs
+  name: dep-multitool
   labels:
-    app: volume-hw2-nfs
+    app: d-multi
 spec:
+  replicas: 1
   selector:
     matchLabels:
-      app: volume-hw2-nfs
-  replicas: 1
+      app: d-multi
   template:
     metadata:
       labels:
-        app: volume-hw2-nfs
+        app: d-multi
     spec:
       containers:
       - name: multitool
         image: wbitt/network-multitool
-        ports:
-        - containerPort: 8080
-        env:
-          - name: HTTP_PORT
-            value: "1180"
         volumeMounts:
-        - name: nfs-storage
-          mountPath: "/data"
+        - name: example-volume
+          mountPath: /input
       volumes:
-      - name: nfs-storage
+      - name: example-volume
         persistentVolumeClaim:
-          claimName: nfs-pvc
+          claimName: example-pvc
 ```
 
 ```
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: nfs-pvc
+  name: example-pvc
 spec:
   accessModes:
     - ReadWriteMany
+  storageClassName: "microk8s-hostpath"
   resources:
     requests:
       storage: 1Gi
 ```
 
+```
+user@k8s:/opt/hw_k8s_7$ microk8s kubectl apply -f deployment-nfs.yml
+deployment.apps/dep-multitool created
+user@k8s:/opt/hw_k8s_7$ microk8s kubectl apply -f pvc-nfs.yml
+persistentvolumeclaim/example-pvc created
+```
 
+```
+user@k8s:/opt/hw_k8s_7$ microk8s kubectl get pvc
+NAME          STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS        VOLUMEATTRIBUTESCLASS   AGE
+example-pvc   Bound    pvc-5c00d1f6-ef4f-4b0c-8ffd-e059ecd93203   1Gi        RWX            microk8s-hostpath   <unset>                 3m51s
+user@k8s:/opt/hw_k8s_7$ microk8s kubectl get pods
+NAME                             READY   STATUS    RESTARTS   AGE
+dep-multitool-55c4b4867f-ml7pp   1/1     Running   0          4m3s
+```
 
-3. Продемонстрировать возможность чтения и записи файла изнутри пода. 
+3. Продемонстрировать возможность чтения и записи файла изнутри пода.
+
+```
+dep-multitool-55c4b4867f-ml7pp:/# echo "test" > /input/test.txt
+dep-multitool-55c4b4867f-ml7pp:/# cat /input/test.txt
+test
+```
+
 4. Предоставить манифесты, а также скриншоты или вывод необходимых команд.
 
 ------
