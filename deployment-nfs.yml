@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dep-multitool
+  labels:
+    app: d-multi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: d-multi
+  template:
+    metadata:
+      labels:
+        app: d-multi
+    spec:
+      containers:
+      - name: multitool
+        image: wbitt/network-multitool
+        volumeMounts:
+        - name: example-volume
+          mountPath: /input
+      volumes:
+      - name: example-volume
+        persistentVolumeClaim:
+          claimName: example-pvc

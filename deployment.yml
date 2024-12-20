@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: busybox-multitool
+  labels:
+    app: busy-multi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: busy-multi
+  template:
+    metadata:
+      labels:
+        app: busy-multi
+    spec:
+      containers:
+      - name: app1
+        image: busybox
+        command: ['sh', '-c', 'while true; do echo "Домашнее задание к занятию «Хранение в K8s. Часть 2»" >> /output/success.txt; sleep 5; done']
+        volumeMounts:
+        - mountPath: /output
+          name: example-volume
+
+
+      - name: multitool
+        image: wbitt/network-multitool
+        command: ['sh', '-c', 'tail -f /input/success.txt']
+        volumeMounts:
+        - name: example-volume
+          mountPath: /input
+        ports:
+        - containerPort: 8080
+        env: 
+          - name: HTTP_PORT
+            value: "9080"
+      volumes:
+      - name: example-volume
+        persistentVolumeClaim:
+          claimName: example-pvc
